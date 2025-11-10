@@ -1,0 +1,172 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 208 100% 97%; /* #F0F8FF */
+    --foreground: 222 24% 20%; /* #1E293B */
+
+    --muted: 215 20% 90%; /* #E2E8F0 */
+    --muted-foreground: 215 16% 55%; /* #64748B */
+
+    --popover: 0 0% 100%; /* White */
+    --popover-foreground: 222 24% 20%; /* #1E293B */
+
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 222 24% 20%; /* #1E293B */
+
+    --border: 215 20% 85%; /* #CBD5E1 */
+    --input: 215 20% 90%; /* #E2E8F0 */
+
+    --primary: 196 47% 64%; /* #72BCD4 */
+    --primary-foreground: 0 0% 100%; /* White */
+
+    --secondary: 196 40% 88%; /* Lighter variant of primary */
+    --secondary-foreground: 222 24% 20%; /* #1E293B */
+
+    --accent: 88 50% 56%; /* #8BC34A */
+    --accent-foreground: 0 0% 100%; /* White */
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+
+    --ring: 196 47% 64%; /* Primary color */
+    --radius: 0.5rem;
+
+    /* Sidebar specific theme variables from existing globals, adjusted if needed */
+    --sidebar-background: 208 60% 95%; /* Slightly darker than main background for distinction */
+    --sidebar-foreground: 222 24% 20%; 
+    --sidebar-primary: 196 47% 64%; /* primary */
+    --sidebar-primary-foreground: 0 0% 100%; /* White */
+    --sidebar-accent: 196 40% 88%; /* secondary */
+    --sidebar-accent-foreground: 222 24% 20%;
+    --sidebar-border: 215 20% 80%;
+    --sidebar-ring: 196 47% 64%;
+  }
+
+  .dark {
+    /* Define dark theme variables if needed, for now, focusing on light theme */
+    --background: 222 24% 10%; /* Dark Slate */
+    --foreground: 208 100% 97%; /* Light Alice Blue */
+
+    --muted: 222 24% 20%;
+    --muted-foreground: 215 16% 75%;
+
+    --popover: 222 24% 12%;
+    --popover-foreground: 208 100% 97%;
+
+    --card: 222 24% 12%;
+    --card-foreground: 208 100% 97%;
+
+    --border: 222 24% 30%;
+    --input: 222 24% 25%;
+
+    --primary: 196 47% 64%; 
+    --primary-foreground: 222 24% 10%; 
+
+    --secondary: 196 40% 40%; 
+    --secondary-foreground: 208 100% 97%;
+
+    --accent: 88 50% 56%;
+    --accent-foreground: 222 24% 10%;
+
+    --destructive: 0 63% 40%;
+    --destructive-foreground: 0 0% 98%;
+
+    --ring: 196 47% 64%;
+
+    --sidebar-background: 222 24% 15%;
+    --sidebar-foreground: 208 100% 97%;
+    --sidebar-primary: 196 47% 64%;
+    --sidebar-primary-foreground: 222 24% 10%;
+    --sidebar-accent: 196 40% 30%;
+    --sidebar-accent-foreground: 208 100% 97%;
+    --sidebar-border: 222 24% 25%;
+    --sidebar-ring: 196 47% 64%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Styles for schedule indicator */
+.has-schedule {
+  position: relative;
+}
+
+.has-schedule::after {
+    content: '';
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: hsl(var(--primary)); /* Primary color for light theme */
+}
+
+html.dark .has-schedule::after {
+    background-color: hsl(var(--primary-foreground)); /* A contrasting color for dark theme */
+}
+
+.rdp-day_selected.has-schedule::after,
+.rdp-day_selected:focus.has-schedule::after,
+.rdp-day_selected:active.has-schedule::after {
+    background-color: hsl(var(--primary-foreground));
+}
+
+html.dark .rdp-day_selected.has-schedule::after,
+html.dark .rdp-day_selected:focus.has-schedule::after,
+html.dark .rdp-day_selected:active.has-schedule::after {
+    background-color: hsl(var(--primary));
+}
+
+/* Styles for request indicator */
+.has-request-indicator {
+  position: relative;
+}
+
+.has-request-indicator::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: hsl(var(--primary)); /* Primary color for light theme */
+}
+
+/* Dark theme adjustment for the indicator dot */
+html.dark .has-request-indicator::after {
+  background-color: hsl(var(--primary-foreground)); /* A contrasting color for dark theme */
+}
+
+/* Ensure the dot is visible when the date is selected in light theme */
+.rdp-day_selected.has-request-indicator::after,
+.rdp-day_selected:focus.has-request-indicator::after,
+.rdp-day_selected:active.has-request-indicator::after {
+  background-color: hsl(var(--primary-foreground));
+}
+
+/* Ensure the dot is visible when the date is selected in dark theme */
+html.dark .rdp-day_selected.has-request-indicator::after,
+html.dark .rdp-day_selected:focus.has-request-indicator::after,
+html.dark .rdp-day_selected:active.has-request-indicator::after {
+  background-color: hsl(var(--primary));
+}
+
+/* Force Google Maps autocomplete suggestions to be on top and clickable */
+.pac-container {
+  z-index: 99999 !important; /* Increased z-index */
+  pointer-events: auto !important; /* Ensure it receives pointer events */
+}

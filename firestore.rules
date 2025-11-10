@@ -1,0 +1,52 @@
+// Allow read/write access to the authenticated user's own user document
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAdmin() {
+      return request.auth.token.admin == true;
+    }
+    function isCaregiver() {
+      return request.auth.token.caregiver == true;
+    }
+    function isAuthorized() {
+      return isAdmin() || isCaregiver();
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read, update: if request.auth.uid == userId || isAuthorized();
+      allow create, list: if isAuthorized();
+    }
+
+    // Patients Collection
+    match /patients/{patientId} {
+      allow read, create, update, delete: if isAuthorized();
+    }
+    
+    // Notifications Collection
+    match /notifications/{notificationId} {
+      allow read, update: if request.auth.uid == resource.data.recipientId;
+    }
+
+    // Conversations & Messages
+    match /conversations/{conversationId} {
+      allow read: if request.auth.uid in resource.data.participants;
+      match /messages/{messageId} {
+        allow read: if request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        allow create: if request.auth.uid == request.resource.data.senderId && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+      }
+    }
+
+    // Schedules Collection
+		match /schedules/{scheduleId} {
+		  allow read, create, delete: if isAuthorized();
+		  allow update: if (isCaregiver() && request.auth.uid == resource.data.caregiverId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'notes', 'subTasks', 'clockIn', 'clockOut', 'gpsLocation', 'totalHours'])) || isAuthorized();
+		}
+		
+		// Requests Collection
+		match /requests/{requestId} {
+		  allow create: if isCaregiver() && request.resource.data.caregiverId == request.auth.uid;
+		  allow read, update: if isAuthorized();
+		}
+  }
+}

@@ -1,0 +1,58 @@
+
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# next.js
+/.next/
+/out/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+.env
+
+# firebase
+.firebase/
+firebase-debug.log
+.idx/
+serviceAccountKey.json
+firestore-debug.log
+pglite-debug.log
+
+# Explicitly ignore package-lock.json as well
+package-lock.json
+functions/node_modules
+functions/package-lock.json
+
+# supabase
+.supabase/
+supabase/.branches
+supabase/.temp
+
+# Temporary setup files (not needed in repo)
+GET_ACCESS_TOKEN.md
+GET_DB_PASSWORD.md
+GIT_SETUP.md
+setup-env.js
+
+# Old/debug files
+.git_old/
+.modified
