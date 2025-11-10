@@ -1,26 +1,21 @@
-
 'use client';
 
 import type { UserRole, AuthUser as AppAuthUser } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
-import { app } from '@/lib/firebase';
+import { createClient } from '@/lib/supabase/client';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 import useIdle from '@/hooks/use-idle';
-import { uploadImage } from '@/lib/storage'; // Import uploadImage
-import { updateUser } from '@/lib/firestore'; // Import updateUser
 
-const auth = getAuth(app);
-const db = getFirestore(app);
+const supabase = createClient();
 
 type AuthUser = AppAuthUser;
 
 interface AuthContextType {
   user: AuthUser | null;
-  firebaseUser: FirebaseUser | null;
+  supabaseUser: SupabaseUser | null;
   role: UserRole | null;
   loading: boolean;
   isPinSetupRequired: boolean;
@@ -39,7 +34,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPinSetupRequired, setPinSetupRequired] = useState(false);
   const router = useRouter();
@@ -57,65 +52,109 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useIdle(300000, lock, !!user);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      setFirebaseUser(fbUser);
-      if (fbUser) {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        loadUserData(session.user);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSupabaseUser(session?.user ?? null);
+      
+      if (session?.user) {
+        // Check if screen is locked
         if (localStorage.getItem('lockedScreenUser')) {
-            setUser(null);
-            setLoading(false);
-            if (pathname !== '/lock') router.push('/lock');
-            return;
+          setUser(null);
+          setLoading(false);
+          if (pathname !== '/lock') router.push('/lock');
+          return;
         }
 
-        try {
-          const userDocRef = doc(db, 'users', fbUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
-
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            const authUser: AuthUser = {
-              uid: fbUser.uid,
-              email: fbUser.email || '',
-              displayName: userData.name || '',
-              role: userData.role as UserRole,
-              phoneNumber: userData.phone,
-              profilePictureUrl: userData.profilePictureUrl,
-              fingerprintEnabled: userData.fingerprintEnabled || false,
-              pin: userData.pin,
-            };
-            setUser(authUser);
-            const isPublicPage = pathname === '/login' || pathname === '/lock';
-            setPinSetupRequired(!userData.pin && !isPublicPage);
-
-            if (isPublicPage) {
-              router.replace(authUser.role === 'admin' ? '/admin/dashboard' : '/caregiver/dashboard');
-            }
-          } else {
-            await signOut(auth);
-          }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          await signOut(auth);
-        }
+        await loadUserData(session.user);
       } else {
         setUser(null);
         setPinSetupRequired(false);
         const isPublicPage = pathname === '/login' || pathname === '/lock';
         if (!isPublicPage) {
-            router.replace('/login');
+          router.replace('/login');
         }
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => subscription.unsubscribe();
   }, [pathname, router]);
+
+  const loadUserData = async (supabaseUser: SupabaseUser) => {
+    try {
+      // Fetch user data from database
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('auth_id', supabaseUser.id)
+        .single();
+
+      if (error || !userData) {
+        console.error('Error fetching user data:', error);
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
+
+      const authUser: AuthUser = {
+        uid: userData.id,
+        email: userData.email || '',
+        displayName: userData.name || '',
+        role: userData.role as UserRole,
+        phoneNumber: userData.phone,
+        profilePictureUrl: userData.profile_picture_url,
+        fingerprintEnabled: userData.fingerprint_enabled || false,
+        pin: userData.pin,
+      };
+
+      setUser(authUser);
+      const isPublicPage = pathname === '/login' || pathname === '/lock';
+      setPinSetupRequired(!userData.pin && !isPublicPage);
+
+      if (isPublicPage) {
+        router.replace(authUser.role === 'admin' ? '/admin/dashboard' : '/caregiver/dashboard');
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      await supabase.auth.signOut();
+      setLoading(false);
+    }
+  };
 
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        toast({ 
+          title: "Login Failed", 
+          description: error.message || "Invalid email or password.", 
+          variant: "destructive" 
+        });
+        setLoading(false);
+        throw error;
+      }
+
+      // User data will be loaded by the onAuthStateChange listener
     } catch (error) {
-      toast({ title: "Login Failed", description: "Invalid email or password.", variant: "destructive" });
+      console.error('Login error:', error);
       setLoading(false);
       throw error;
     }
@@ -123,12 +162,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     localStorage.removeItem('lockedScreenUser');
-    await signOut(auth);
+    await supabase.auth.signOut();
   };
 
   const updatePin = async (newPin: string) => {
     if (!user) throw new Error("No user logged in");
-    await updateDoc(doc(db, 'users', user.uid), { pin: newPin });
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ pin: newPin })
+      .eq('id', user.uid);
+
+    if (error) {
+      toast({ 
+        title: "Error", 
+        description: "Failed to update PIN.", 
+        variant: "destructive" 
+      });
+      throw error;
+    }
+
     setUser({ ...user, pin: newPin });
     setPinSetupRequired(false);
     toast({ title: "PIN Updated", description: "Your PIN has been set." });
@@ -137,24 +190,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const verifyPin = async (enteredPin: string): Promise<boolean> => {
     const lockedUserJSON = localStorage.getItem('lockedScreenUser');
     if (!lockedUserJSON) {
-        router.push('/login');
-        return false;
+      router.push('/login');
+      return false;
     }
     const lockedUser: AuthUser = JSON.parse(lockedUserJSON);
     if (lockedUser.pin === enteredPin) {
-        localStorage.removeItem('lockedScreenUser');
-        setUser(lockedUser);
-        router.replace(lockedUser.role === 'admin' ? '/admin/dashboard' : '/caregiver/dashboard');
-        return true;
+      localStorage.removeItem('lockedScreenUser');
+      setUser(lockedUser);
+      router.replace(lockedUser.role === 'admin' ? '/admin/dashboard' : '/caregiver/dashboard');
+      return true;
     }
     return false;
   };
-  
+
   const loginWithBiometric = () => {
     const lockedUserJSON = localStorage.getItem('lockedScreenUser');
     if (!lockedUserJSON) {
-        router.push('/login');
-        return;
+      router.push('/login');
+      return;
     }
     const lockedUser: AuthUser = JSON.parse(lockedUserJSON);
     localStorage.removeItem('lockedScreenUser');
@@ -167,16 +220,50 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!file) throw new Error("No file provided");
 
     try {
-      const imagePath = `user_profile_pictures/${user.uid}/${Date.now()}_${file.name}`;
-      const downloadURL = await uploadImage(file, imagePath);
-      
-      await updateUser(user.uid, { profilePictureUrl: downloadURL });
-      setUser(prevUser => prevUser ? { ...prevUser, profilePictureUrl: downloadURL } : null);
-      toast({ title: "Profile Picture Updated", description: "Your profile picture has been updated successfully." });
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.uid}-${Date.now()}.${fileExt}`;
+      const filePath = `${user.uid}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('profile-pictures')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-pictures')
+        .getPublicUrl(filePath);
+
+      // Update user record
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ profile_picture_url: publicUrl })
+        .eq('id', user.uid);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setUser(prevUser => prevUser ? { ...prevUser, profilePictureUrl: publicUrl } : null);
+      toast({ 
+        title: "Profile Picture Updated", 
+        description: "Your profile picture has been updated successfully." 
+      });
     } catch (error) {
       console.error("Error uploading profile picture:", error);
-      toast({ title: "Error", description: "Failed to update profile picture.", variant: "destructive" });
-      throw error; // Re-throw to be caught by the component
+      toast({ 
+        title: "Error", 
+        description: "Failed to update profile picture.", 
+        variant: "destructive" 
+      });
+      throw error;
     }
   };
 
@@ -184,7 +271,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!user) throw new Error("No user logged in to update phone number.");
     setLoading(true);
     try {
-      await updateDoc(doc(db, 'users', user.uid), { phone: phoneNumber });
+      const { error } = await supabase
+        .from('users')
+        .update({ phone: phoneNumber })
+        .eq('id', user.uid);
+
+      if (error) throw error;
+
       setUser(prevUser => prevUser ? { ...prevUser, phoneNumber: phoneNumber } : null);
     } catch (error) {
       console.error("Error updating phone number:", error);
@@ -198,7 +291,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!user) throw new Error("No user logged in to update fingerprint preference.");
     setLoading(true);
     try {
-      await updateDoc(doc(db, 'users', user.uid), { fingerprintEnabled: enabled });
+      const { error } = await supabase
+        .from('users')
+        .update({ fingerprint_enabled: enabled })
+        .eq('id', user.uid);
+
+      if (error) throw error;
+
       setUser(prevUser => prevUser ? { ...prevUser, fingerprintEnabled: enabled } : null);
     } catch (error) {
       console.error("Error updating fingerprint preference:", error);
@@ -210,7 +309,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const contextValue: AuthContextType = {
     user,
-    firebaseUser,
+    supabaseUser,
     role: user?.role ?? null,
     loading,
     isPinSetupRequired,
