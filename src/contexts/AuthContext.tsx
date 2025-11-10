@@ -4,12 +4,10 @@ import type { UserRole, AuthUser as AppAuthUser } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 import useIdle from '@/hooks/use-idle';
-
-const supabase = createClient();
 
 type AuthUser = AppAuthUser;
 
