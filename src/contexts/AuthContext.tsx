@@ -91,19 +91,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loadUserData = async (supabaseUser: SupabaseUser) => {
     try {
-      // Fetch user data from database
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('auth_id', supabaseUser.id)
-        .single();
+      // Fetch user data using security definer RPC to bypass RLS issues
+      const { data, error } = await supabase.rpc('get_user_by_auth_id', {
+        auth_user_id: supabaseUser.id,
+      });
 
-      if (error || !userData) {
+      if (error || !data || data.length === 0) {
         console.error('Error fetching user data:', error);
         await supabase.auth.signOut();
         setLoading(false);
         return;
       }
+
+      const userData = data[0];
 
       const authUser: AuthUser = {
         uid: userData.id,
@@ -123,7 +123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (isPublicPage) {
         router.replace(authUser.role === 'admin' ? '/admin/dashboard' : '/caregiver/dashboard');
       }
-      
+
       setLoading(false);
     } catch (error) {
       console.error('Error loading user data:', error);
